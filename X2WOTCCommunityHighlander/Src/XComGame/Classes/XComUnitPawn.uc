@@ -2054,7 +2054,9 @@ simulated function EquipWeapon( XComWeapon kWeapon, bool bImmediate, bool bIsRea
 			}
 			// End Issue #921
 
-			Mesh.AttachComponentToSocket(kWeapon.Mesh, kWeapon.DefaultSocket);
+			// Start Issue #1113
+			Mesh.AttachComponentToSocket(kWeapon.Mesh, kWeapon.DefaultSocket, GetWeaponMeshSocketToAttach(kWeapon,, Item));
+			// End Issue #1113
 			kWeapon.Mesh.CastShadow = true;
 		}
 
@@ -2126,6 +2128,47 @@ private function bool TriggerOverrideWeaponScale(out float fOverrideWeaponScale,
 	return OverrideTuple.Data[0].b;
 }
 // End Issue #921
+
+// Start Issue #1113
+/// HL-Docs: feature:DefaultWeaponMeshSocket; issue:1113; tags:pawns
+/// By default, all weapons attach on the 'Root' bone or the bone that's the parent of all bones. This will allow mods to modify the default position of where this weapon is attached to. 
+/// If there is no socket name defined or socket doesn't exist, then the socket will fall back to attaching to the 'Root' bone or the highest bone hierarchy.
+/// Having this would allow weapons to swap between locations based on context (i.e. having a weapon upgrade that changes out the stock to a different grip).
+///
+/// Same as #921, the event is triggered in two places:
+/// 1) `XComUnitPawn::EquipWeapon()` is used by items in weapon slots, as well as for utility items
+/// that use the [Display Multi Slot Items](../misc/DisplayMultiSlotItems.md) functionality. 
+///	The Actor is `XComWeapon`. MeshComp is `none` since the mesh that is getting attached is `XComWeapon.Mesh`.
+/// 2) `XComUnitPawn::AttachItem()` is used for utility items by default. In this case,
+/// the `ItemState` component of the Tuple will be `none`. The Actor is a standard `Actor`. MeshComp is the current mesh that is about to get attached.
+///
+/// ```event
+/// EventID: CHL_ReplaceWeaponMeshSocket,
+/// EventData: [out name SocketName, in XComGameState_Item Item, in Actor aEnt, in MeshComponent MeshComp],
+/// EventSource: XComUnitPawn (UnitPawn),
+/// NewGameState: none
+/// ```
+function name GetWeaponMeshSocketToAttach(Actor aEnt, optional MeshComponent MeshComp, optional XComGameState_Item Item)
+{
+	local XComLWTuple OverrideTuple;
+
+	OverrideTuple = new class'XComLWTuple';
+	OverrideTuple.Id = 'CHL_ReplaceWeaponMeshSocket';
+	OverrideTuple.Data.Add(3);
+	OverrideTuple.Data[0].kind = XComLWTVName;
+	OverrideTuple.Data[0].n = ''; 
+	OverrideTuple.Data[1].kind = XComLWTVObject;
+	OverrideTuple.Data[1].o = Item; 
+	OverrideTuple.Data[2].kind = XComLWTVObject;
+	OverrideTuple.Data[2].o = aEnt; 
+	OverrideTuple.Data[3].kind = XComLWTVObject;
+	OverrideTuple.Data[3].o = MeshComp; 
+
+	`XEVENTMGR.TriggerEvent('CHL_ReplaceWeaponMeshSocket', OverrideTuple, self);
+
+	return OverrideTuple.Data[0].n;
+}
+// End Issue #1113
 
 // This function creates and attaches the meshes needed for a soldier's loadout in a non-gamestate altering way.
 // It is ONLY intended for representative purposes, such as the UI, throwaway matinee pawns, etc. Do not use it 
@@ -2603,7 +2646,9 @@ simulated function AttachItem(Actor a, name SocketName, bool bIsRearBackPackItem
 			// End Issue #921
 
 			// `log("Pawn::AddItem:" @ MeshComp @ SocketName);
-			Mesh.AttachComponentToSocket(MeshComp, SocketName);
+			// Start Issue #1113
+			Mesh.AttachComponentToSocket(MeshComp, SocketName, GetWeaponMeshSocketToAttach(a, MeshComp));
+			// End Issue #1113
 
 			// MHU - When the component is moved from Item.m_kEntity's Components array over to
 			//       the Unit Mesh Attachments array, we save a ptr to the found mesh component.
